@@ -137,7 +137,7 @@ class BMTuner(object):
             self.block_matcher.__setattr__(parameter, new_value)
         except BadBlockMatcherArgumentError:
             return
-        self.update_disparity_map()
+        self._update_disparity_map_no_wait()
 
     def _initialize_trackbars(self):
         """
@@ -181,7 +181,7 @@ class BMTuner(object):
         self._initialize_trackbars()
         self.tune_pair(image_pair)
 
-    def update_disparity_map(self):
+    def _update_disparity_map_no_wait(self):
         """
         Update disparity map in GUI.
 
@@ -192,13 +192,16 @@ class BMTuner(object):
         disparity = self.block_matcher.get_disparity(self.pair)
         norm_coeff = 255 / disparity.max()
         cv2.imshow(self.window_name, disparity * norm_coeff / 255)
+
+    def _update_disparity_map_and_wait(self):
+        self._update_disparity_map_no_wait()
         cv2.waitKey()
 
     def tune_pair(self, pair):
         """Tune a pair of images."""
         self._save_bm_state()
         self.pair = pair
-        self.update_disparity_map()
+        self._update_disparity_map_and_wait()
 
     def report_settings(self, parameter):
         """
