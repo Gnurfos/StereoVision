@@ -46,6 +46,8 @@ from stereovision.calibration import StereoCalibrator
 from stereovision.exceptions import BadBlockMatcherArgumentError
 
 #: Command line arguments for collecting information about chessboards
+import numpy
+
 CHESSBOARD_ARGUMENTS = ArgumentParser(add_help=False)
 CHESSBOARD_ARGUMENTS.add_argument("--rows", type=int,
                                   help="Number of inside corners in the "
@@ -158,7 +160,7 @@ class BMTuner(object):
             self.bm_settings[parameter].append(
                                self.block_matcher.__getattribute__(parameter))
 
-    def __init__(self, block_matcher, calibration, image_pair):
+    def __init__(self, block_matcher, calibration, image_pair, show_sources=False):
         """
         Initialize tuner window and tune given pair.
 
@@ -179,7 +181,7 @@ class BMTuner(object):
             self.bm_settings[parameter] = []
         cv2.namedWindow(self.window_name)
         self._initialize_trackbars()
-        self.tune_pair(image_pair)
+        self.show_sources = show_sources
 
     def _update_disparity_map_no_wait(self):
         """
@@ -190,18 +192,30 @@ class BMTuner(object):
         because the pixels are stored as floating points.
         """
         disparity = self.block_matcher.get_disparity(self.pair)
-        norm_coeff = 255 / disparity.max()
-        cv2.imshow(self.window_name, disparity * norm_coeff / 255)
+        if self.show_sources:
+            gray_l = cv2.cvtColor(self.pair[0], cv2.COLOR_BGR2GRAY)
+            gray_r = cv2.cvtColor(self.pair[1], cv2.COLOR_BGR2GRAY)
+            norm_coeff = 255 / disparity.max()
+            disparity = (disparity * norm_coeff).astype(numpy.uint8)
+            display = numpy.concatenate((gray_l, disparity), axis=1)
+            display = numpy.concatenate((display, gray_r), axis=1)
+        else:
+            disparity = disparity / disparity.max()
+            display = disparity
+        cv2.imshow(self.window_name, display)
 
     def _update_disparity_map_and_wait(self):
         self._update_disparity_map_no_wait()
         cv2.waitKey()
 
-    def tune_pair(self, pair):
+    def tune_pair(self, pair, wait_key=True):
         """Tune a pair of images."""
         self._save_bm_state()
         self.pair = pair
-        self._update_disparity_map_and_wait()
+        if wait_key:
+            self._update_disparity_map_and_wait()
+        else:
+            self._update_disparity_map_no_wait()
 
     def report_settings(self, parameter):
         """

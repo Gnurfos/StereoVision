@@ -1,0 +1,81 @@
+#!/usr/bin/env python
+# Copyright (C) 2014 Daniel Lee <lee.daniel.1986@gmail.com>
+#
+# This file is part of StereoVision.
+#
+# StereoVision is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# StereoVision is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with StereoVision.  If not, see <http://www.gnu.org/licenses/>.
+
+"""
+Combines tune_blockmatcher and show_webcams: allows tuning blockmatcher
+parameters using images continuously refreshed from the cameras, rather
+than a fixed files set
+"""
+
+from argparse import ArgumentParser
+
+import cv2
+
+from stereovision.blockmatchers import StereoBM, StereoSGBM
+from stereovision.calibration import StereoCalibration
+from stereovision.ui_utils import find_files, BMTuner, STEREO_BM_FLAG
+from stereovision.stereo_cameras import StereoPair
+
+
+def main():
+    parser = ArgumentParser(description="Read images taken from a pair of "
+                           "cameras, compute disparity maps from them and "
+                           "show them interactively to the user, allowing the "
+                           "user to tune the stereo block matcher settings in "
+                           "the GUI.", parents=[STEREO_BM_FLAG])
+    parser.add_argument("calibration_folder",
+                        help="Directory where calibration files for the stereo "
+                        "pair are stored.")
+    parser.add_argument("devices", type=int, nargs=2, help="Device numbers "
+                        "for the cameras that should be accessed in order "
+                        " (left, right).")
+    parser.add_argument("--resolution", type=str, default=None,
+                        help="Capture resolution (WxH).")
+    parser.add_argument("--bm_settings",
+                        help="File to save last block matcher settings to.",
+                        default="")
+    args = parser.parse_args()
+
+    calibration = StereoCalibration(input_folder=args.calibration_folder)
+    if args.use_stereobm:
+        block_matcher = StereoBM()
+    else:
+        block_matcher = StereoSGBM(min_disparity=0)
+
+    with StereoPair(args.devices, args.resolution) as pair:
+        image_pair = pair.get_frames()
+        rectified_pair = calibration.rectify(image_pair)
+        tuner = BMTuner(block_matcher, calibration, rectified_pair, show_sources=True)
+
+        while True:
+            image_pair = pair.get_frames()
+            rectified_pair = calibration.rectify(image_pair)
+            tuner.tune_pair(rectified_pair, wait_key=False)
+            key = cv2.waitKey(10)
+            if key != -1:
+                break
+
+    for param in block_matcher.parameter_maxima:
+        print("{}\n".format(tuner.report_settings(param)))
+
+    if args.bm_settings:
+        block_matcher.save_settings(args.bm_settings)
+
+
+if __name__ == "__main__":
+    main()
