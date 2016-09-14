@@ -205,15 +205,20 @@ class StereoBM(BlockMatcher):
 
 
 class RangeConstraint(object):
+
     def __init__(self, min, max):
         self.min = min
         self.max = max
+
     def trackbar_value(self, value):
         return value - self.min
+
     def trackbar_max(self):
         return self.max - self.min
+
     def actual_value(self, trackbar_value):
         return trackbar_value + self.min
+
     def trackbar_name(self, parameter):
         if self.min < 0:
             return parameter + " (%s)" % self.min
@@ -221,6 +226,29 @@ class RangeConstraint(object):
             return parameter + " (+%s)" % self.min
         else:
             return parameter
+
+
+class SteppedRangeConstraint(object):
+
+    def __init__(self, step, min, max):
+        assert step > 0
+        self.step = step
+        assert (max - min) % step == 0
+        self.min = min
+        self.max = max
+
+    def trackbar_value(self, value):
+        assert (value - self.min) % self.step == 0
+        return (value - self.min) / self.step
+
+    def trackbar_max(self):
+        return (self.max - self.min) / self.step
+
+    def actual_value(self, trackbar_value):
+        return trackbar_value * self.step + self.min
+
+    def trackbar_name(self, parameter):
+        return parameter + " (*%s + %s)" % (self.step, self.min)
 
 
 class StereoSGBM(BlockMatcher):
@@ -240,10 +268,20 @@ class StereoSGBM(BlockMatcher):
 
     parameter_constraints = {
         "minDisparity": RangeConstraint(-10, 100),
+        "numDisparities": SteppedRangeConstraint(16, 16, 160),
+        "SADWindowSize": SteppedRangeConstraint(2, 3, 11),
+        "P1": RangeConstraint(0, 500),
+        "P2": RangeConstraint(0, 500),
+        "disp12MaxDiff": RangeConstraint(-1, 500),
+        "uniquenessRatio": RangeConstraint(5, 15),
+        "speckleWindowSize": RangeConstraint(0, 200),
+        "speckleRange": RangeConstraint(0, 2),
+        "fullDP": RangeConstraint(0, 1),
     }
 
     def parameter_names(self):
-        return self.__class__.parameter_maxima.keys()
+        names = self.__class__.parameter_maxima.keys()
+        return sorted(names)
 
     @property
     def minDisparity(self):
