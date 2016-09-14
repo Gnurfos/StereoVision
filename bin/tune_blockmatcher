@@ -1,4 +1,4 @@
-#!/bin/python
+#!/usr/bin/env python
 # Copyright (C) 2014 Daniel Lee <lee.daniel.1986@gmail.com>
 #
 # This file is part of StereoVision.
@@ -58,9 +58,8 @@ def main():
         block_matcher = StereoBM()
     else:
         block_matcher = StereoSGBM()
-    image_pair = [cv2.imread(image) for image in input_files[:2]]
-    input_files = input_files[2:]
-    rectified_pair = calibration.rectify(image_pair)
+    first_image_pair = [cv2.imread(image) for image in input_files[:2]]
+    rectified_pair = calibration.rectify(first_image_pair)
     tuner = BMTuner(block_matcher, calibration, rectified_pair)
 
     while input_files:

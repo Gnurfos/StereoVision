@@ -48,23 +48,30 @@ class StereoPair(object):
     #: Window names for showing captured frame from each camera
     windows = ["{} camera".format(side) for side in ("Left", "Right")]
 
-    def __init__(self, devices):
+    def __init__(self, devices, resolution=None):
         """
         Initialize cameras.
 
         ``devices`` is an iterable containing the device numbers.
+        ``resolution`` can be either an int pair, or a string like "320x240"
+                       to which the cameras capture will be forced
         """
 
         if devices[0] != devices[1]:
             #: Video captures associated with the ``StereoPair``
             self.captures = [cv2.VideoCapture(device) for device in devices]
-            for c in self.captures:
-                c.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 320)
-                c.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 240)
         else:
             # Stereo images come from a single device, as single image
             self.captures = [cv2.VideoCapture(devices[0])]
             self.get_frames = self.get_frames_singleimage
+
+        if resolution is not None:
+            if isinstance(resolution, basestring):
+                resolution = map(int, resolution.split("x"))
+            for c in self.captures:
+                c.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, resolution[0])
+                c.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, resolution[1])
+
 
     def __enter__(self):
         return self

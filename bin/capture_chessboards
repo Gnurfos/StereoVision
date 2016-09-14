@@ -1,4 +1,4 @@
-#!/bin/python
+#!/usr/bin/env python
 # Copyright (C) 2014 Daniel Lee <lee.daniel.1986@gmail.com>
 #
 # This file is part of StereoVision.
@@ -45,6 +45,8 @@ def main():
                            parents=[CHESSBOARD_ARGUMENTS])
     parser.add_argument("left", metavar="left", type=int,
                         help="Device numbers for the left camera.")
+    parser.add_argument("--resolution", type=str, default=None,
+                        help="Capture resolution (WxH).")
     parser.add_argument("right", metavar="right", type=int,
                         help="Device numbers for the right camera.")
     parser.add_argument("num_pictures", type=int, help="Number of valid "
@@ -62,7 +64,7 @@ def main():
     if not os.path.exists(args.output_folder):
         os.makedirs(args.output_folder)
     progress.start()
-    with ChessboardFinder((args.left, args.right)) as pair:
+    with ChessboardFinder((args.left, args.right), args.resolution) as pair:
         for i in range(args.num_pictures):
             frames = pair.get_chessboard(args.columns, args.rows, True)
             for side, frame in zip(("left", "right"), frames):

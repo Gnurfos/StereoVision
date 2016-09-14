@@ -1,4 +1,4 @@
-#!/bin/python
+#!/usr/bin/env python
 # Copyright (C) 2014 Daniel Lee <lee.daniel.1986@gmail.com>
 #
 # This file is part of StereoVision.
@@ -39,13 +39,15 @@ def main():
     parser.add_argument("devices", type=int, nargs=2, help="Device numbers "
                         "for the cameras that should be accessed in order "
                         " (left, right).")
+    parser.add_argument("--resolution", type=str, default=None,
+                        help="Capture resolution (WxH).")
     parser.add_argument("--output_folder",
                         help="Folder to write output images to.")
     parser.add_argument("--interval", type=float, default=1,
                         help="Interval (s) to take pictures in.")
     args = parser.parse_args()
 
-    with StereoPair(args.devices) as pair:
+    with StereoPair(args.devices, args.resolution) as pair:
         if not args.output_folder:
             pair.show_videos()
         else:
