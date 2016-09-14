@@ -204,6 +204,25 @@ class StereoBM(BlockMatcher):
                                           disptype=cv2.CV_32F)
 
 
+class RangeConstraint(object):
+    def __init__(self, min, max):
+        self.min = min
+        self.max = max
+    def trackbar_value(self, value):
+        return value - self.min
+    def trackbar_max(self):
+        return self.max - self.min
+    def actual_value(self, trackbar_value):
+        return trackbar_value + self.min
+    def trackbar_name(self, parameter):
+        if self.min < 0:
+            return parameter + " (%s)" % self.min
+        elif self.min > 0:
+            return parameter + " (+%s)" % self.min
+        else:
+            return parameter
+
+
 class StereoSGBM(BlockMatcher):
 
     """A semi-global block matcher."""
@@ -218,6 +237,13 @@ class StereoSGBM(BlockMatcher):
                        "speckleWindowSize": 200,
                        "speckleRange": 2,
                        "fullDP": 1}
+
+    parameter_constraints = {
+        "minDisparity": RangeConstraint(-10, 100),
+    }
+
+    def parameter_names(self):
+        return self.__class__.parameter_maxima.keys()
 
     @property
     def minDisparity(self):

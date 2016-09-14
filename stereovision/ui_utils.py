@@ -133,6 +133,10 @@ class BMTuner(object):
     #: Window to show results in
     window_name = "BM Tuner"
 
+    def _set_value_from_trackbar(self, parameter, constraint, new_trackbar_value):
+        new_value = constraint.actual_value(new_trackbar_value)
+        self._set_value(parameter, new_value)
+
     def _set_value(self, parameter, new_value):
         """Try setting new parameter on ``block_matcher`` and update map."""
         try:
@@ -145,7 +149,18 @@ class BMTuner(object):
         """
         Initialize trackbars by discovering ``block_matcher``'s parameters.
         """
-        for parameter in self.block_matcher.parameter_maxima.keys():
+        for parameter in self.block_matcher.parameter_names():
+            if parameter in self.block_matcher.parameter_constraints:
+                constraint = self.block_matcher.parameter_constraints[parameter]
+                trackbar_name = constraint.trackbar_name(parameter)
+                param_value = self.block_matcher.__getattribute__(parameter)
+                cv2.createTrackbar(
+                    trackbar_name,
+                    self.window_name,
+                    constraint.trackbar_value(param_value),
+                    constraint.trackbar_max(),
+                    partial(self._set_value_from_trackbar, parameter, constraint))
+                return
             maximum = self.block_matcher.parameter_maxima[parameter]
             if not maximum:
                 maximum = self.shortest_dimension
@@ -156,7 +171,7 @@ class BMTuner(object):
 
     def _save_bm_state(self):
         """Save current state of ``block_matcher``."""
-        for parameter in self.block_matcher.parameter_maxima.keys():
+        for parameter in self.block_matcher.parameter_names():
             self.bm_settings[parameter].append(
                                self.block_matcher.__getattribute__(parameter))
 
@@ -177,7 +192,7 @@ class BMTuner(object):
         self.shortest_dimension = min(self.pair[0].shape[:2])
         #: Settings chosen for ``BlockMatcher``
         self.bm_settings = {}
-        for parameter in self.block_matcher.parameter_maxima.keys():
+        for parameter in self.block_matcher.parameter_names():
             self.bm_settings[parameter] = []
         cv2.namedWindow(self.window_name)
         self._initialize_trackbars()
@@ -247,6 +262,6 @@ class BMTuner(object):
             right_column = str(frequency).center(right_column_width)
             report.append("{}|{}".format(left_column, right_column))
         # Remove newest settings
-        for param in self.block_matcher.parameter_maxima.keys():
+        for param in self.block_matcher.parameter_names():
             self.bm_settings[param].pop(-1)
         return "\n".join(report)
