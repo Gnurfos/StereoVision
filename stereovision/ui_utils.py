@@ -141,7 +141,8 @@ class BMTuner(object):
         """Try setting new parameter on ``block_matcher`` and update map."""
         try:
             self.block_matcher.__setattr__(parameter, new_value)
-        except BadBlockMatcherArgumentError:
+        except BadBlockMatcherArgumentError as e:
+            print e
             return
         self._update_disparity_map_no_wait()
 
@@ -160,14 +161,14 @@ class BMTuner(object):
                     constraint.trackbar_value(param_value),
                     constraint.trackbar_max(),
                     partial(self._set_value_from_trackbar, parameter, constraint))
-                return
-            maximum = self.block_matcher.parameter_maxima[parameter]
-            if not maximum:
-                maximum = self.shortest_dimension
-            cv2.createTrackbar(parameter, self.window_name,
-                               self.block_matcher.__getattribute__(parameter),
-                               maximum,
-                               partial(self._set_value, parameter))
+            else:
+                maximum = self.block_matcher.parameter_maxima[parameter]
+                if not maximum:
+                    maximum = self.shortest_dimension
+                cv2.createTrackbar(parameter, self.window_name,
+                                   self.block_matcher.__getattribute__(parameter),
+                                   maximum,
+                                   partial(self._set_value, parameter))
 
     def _save_bm_state(self):
         """Save current state of ``block_matcher``."""
@@ -210,8 +211,8 @@ class BMTuner(object):
         if self.show_sources:
             gray_l = cv2.cvtColor(self.pair[0], cv2.COLOR_BGR2GRAY)
             gray_r = cv2.cvtColor(self.pair[1], cv2.COLOR_BGR2GRAY)
-            norm_coeff = 255 / disparity.max()
-            disparity = (disparity * norm_coeff).astype(numpy.uint8)
+            norm_coeff = 255 / (disparity.max() - disparity.min())
+            disparity = ((disparity - disparity.min()) * norm_coeff).astype(numpy.uint8)
             display = numpy.concatenate((gray_l, disparity), axis=1)
             display = numpy.concatenate((display, gray_r), axis=1)
         else:
