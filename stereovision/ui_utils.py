@@ -150,6 +150,15 @@ class BMTuner(object):
         """
         Initialize trackbars by discovering ``block_matcher``'s parameters.
         """
+        def setMaxDepth(v):
+            self.rendermaxdepth = v
+        cv2.createTrackbar(
+            "maxdepth",
+            self.window_name,
+            1,
+            100,
+            setMaxDepth)
+
         for parameter in self.block_matcher.parameter_names():
             if parameter in self.block_matcher.parameter_constraints:
                 constraint = self.block_matcher.parameter_constraints[parameter]
@@ -198,6 +207,7 @@ class BMTuner(object):
         cv2.namedWindow(self.window_name)
         self._initialize_trackbars()
         self.show_sources = show_sources
+        self.rendermaxdepth = 10
 
     def _update_disparity_map_no_wait(self):
         """
@@ -208,16 +218,21 @@ class BMTuner(object):
         because the pixels are stored as floating points.
         """
         disparity = self.block_matcher.get_disparity(self.pair)
+
+        #gray_l = cv2.cvtColor(self.pair[0], cv2.COLOR_BGR2GRAY)
+        #gray_r = cv2.cvtColor(self.pair[1], cv2.COLOR_BGR2GRAY)
+
+        norm_coeff = self.rendermaxdepth
+        disparity = ((disparity - disparity.min()) * norm_coeff)
+        disparity = numpy.clip(disparity, 0, 255).astype(numpy.uint8)
+        disparity = cv2.applyColorMap(disparity, cv2.COLORMAP_JET)
+        display = disparity
+
         if self.show_sources:
-            gray_l = cv2.cvtColor(self.pair[0], cv2.COLOR_BGR2GRAY)
-            gray_r = cv2.cvtColor(self.pair[1], cv2.COLOR_BGR2GRAY)
-            norm_coeff = 255 / (disparity.max() - disparity.min())
-            disparity = ((disparity - disparity.min()) * norm_coeff).astype(numpy.uint8)
-            display = numpy.concatenate((gray_l, disparity), axis=1)
-            display = numpy.concatenate((display, gray_r), axis=1)
-        else:
-            disparity = disparity / disparity.max()
-            display = disparity
+
+            display = numpy.concatenate((self.pair[0], display), axis=1)
+            display = numpy.concatenate((display, self.pair[1]), axis=1)
+
         cv2.imshow(self.window_name, display)
 
     def _update_disparity_map_and_wait(self):

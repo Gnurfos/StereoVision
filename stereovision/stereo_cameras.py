@@ -32,6 +32,7 @@ Classes:
 import cv2
 
 from stereovision.point_cloud import PointCloud
+import numpy
 
 
 class StereoPair(object):
@@ -169,6 +170,7 @@ class CalibratedPair(StereoPair):
     def get_point_cloud(self, pair):
         """Get 3D point cloud from image pair."""
         disparity = self.block_matcher.get_disparity(pair)
+        disparity = ((disparity - disparity.min()) * 255 / (disparity.max() - disparity.min())).astype(numpy.uint8)
         points = self.block_matcher.get_3d(disparity,
                                            self.calibration.disp_to_depth_mat)
         colors = cv2.cvtColor(pair[0], cv2.COLOR_BGR2RGB)
