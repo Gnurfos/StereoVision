@@ -222,11 +222,17 @@ class BMTuner(object):
         #gray_l = cv2.cvtColor(self.pair[0], cv2.COLOR_BGR2GRAY)
         #gray_r = cv2.cvtColor(self.pair[1], cv2.COLOR_BGR2GRAY)
 
+        validity_threshold = self.block_matcher.minDisparity - 1 + numpy.finfo(numpy.float32).eps
+        _, validity_map = cv2.threshold(disparity, validity_threshold, 255, cv2.THRESH_BINARY)
+        validity_map = validity_map.astype(numpy.uint8)
+        validity_map = cv2.cvtColor(validity_map, cv2.COLOR_GRAY2BGR)
+
         norm_coeff = self.rendermaxdepth
-        disparity = ((disparity - disparity.min()) * norm_coeff)
-        disparity = numpy.clip(disparity, 0, 255).astype(numpy.uint8)
-        disparity = cv2.applyColorMap(disparity, cv2.COLORMAP_JET)
-        display = disparity
+        corrected_disparity = ((disparity - disparity.min()) * norm_coeff)
+        corrected_disparity = numpy.clip(corrected_disparity, 0, 255).astype(numpy.uint8)
+        corrected_disparity = cv2.applyColorMap(corrected_disparity, cv2.COLORMAP_JET)
+        corrected_disparity = cv2.bitwise_and(corrected_disparity, validity_map)
+        display = corrected_disparity
 
         if self.show_sources:
 
