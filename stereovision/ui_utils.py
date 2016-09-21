@@ -185,7 +185,7 @@ class BMTuner(object):
             self.bm_settings[parameter].append(
                                self.block_matcher.__getattribute__(parameter))
 
-    def __init__(self, block_matcher, calibration, image_pair, show_sources=False):
+    def __init__(self, block_matcher, calibration, image_pair, show_sources=False, time_smoothing_window=3):
         """
         Initialize tuner window and tune given pair.
 
@@ -209,6 +209,11 @@ class BMTuner(object):
         self.show_sources = show_sources
         self.rendermaxdepth = 10
 
+        self.time_smoothing_window = time_smoothing_window
+        self.last_disparities = [None] * time_smoothing_window
+        self.next_disparity_index = 0
+        self.accepted_deviation = 10
+
     def _update_disparity_map_no_wait(self):
         """
         Update disparity map in GUI.
@@ -227,10 +232,7 @@ class BMTuner(object):
         validity_map = validity_map.astype(numpy.uint8)
         validity_map = cv2.cvtColor(validity_map, cv2.COLOR_GRAY2BGR)
 
-        norm_coeff = self.rendermaxdepth
-        corrected_disparity = ((disparity - disparity.min()) * norm_coeff)
-        corrected_disparity = numpy.clip(corrected_disparity, 0, 255).astype(numpy.uint8)
-        corrected_disparity = cv2.applyColorMap(corrected_disparity, cv2.COLORMAP_JET)
+        corrected_disparity = self._color_disparity(disparity)
         corrected_disparity = cv2.bitwise_and(corrected_disparity, validity_map)
         display = corrected_disparity
 
@@ -239,11 +241,43 @@ class BMTuner(object):
             display = numpy.concatenate((self.pair[0], display), axis=1)
             display = numpy.concatenate((display, self.pair[1]), axis=1)
 
+        self.last_disparities[self.next_disparity_index] = disparity
+        self.next_disparity_index = (self.next_disparity_index + 1) % self.time_smoothing_window
+
+        smoothed = self._get_smoothed_disparity()
+
+        padding = numpy.zeros((self.pair[0].shape[0], self.pair[0].shape[1], 3), numpy.uint8)
+        padded = numpy.concatenate((padding, smoothed, padding), axis=1)
+        display = numpy.concatenate((display, padded), axis=0)
+
         cv2.imshow(self.window_name, display)
 
     def _update_disparity_map_and_wait(self):
         self._update_disparity_map_no_wait()
         cv2.waitKey()
+
+    def _color_disparity(self, disparity):
+        norm_coeff = self.rendermaxdepth
+        corrected_disparity = ((disparity - disparity.min()) * norm_coeff)
+        corrected_disparity = numpy.clip(corrected_disparity, 0, 255).astype(numpy.uint8)
+        return cv2.applyColorMap(corrected_disparity, cv2.COLORMAP_JET)
+
+    def _get_smoothed_disparity(self):
+        validity_threshold = self.block_matcher.minDisparity - 1 + numpy.finfo(numpy.float32).eps
+        validities = [cv2.threshold(d, validity_threshold, 255, cv2.THRESH_BINARY)[1].astype(numpy.uint8) for d in self.last_disparities if d is not None]
+        validity = reduce(cv2.bitwise_and, validities)
+        validity3d = cv2.cvtColor(validity, cv2.COLOR_GRAY2BGR)
+        res_disp = numpy.zeros_like(self.last_disparities[0])
+        for (x, y), pixel_validity in numpy.ndenumerate(validity):
+            if pixel_validity:
+                disps = [d[x][y] for d in self.last_disparities if d is not None]
+                dev = numpy.std(disps)
+                if dev < self.accepted_deviation:
+                    res_disp[x][y] = numpy.mean(disps)
+                else:
+                    print 'Discarding too deviant disparity (%s) at %s,%s' % (dev, x, y)
+        res_disp = self._color_disparity(res_disp)
+        return cv2.bitwise_and(res_disp, validity3d)
 
     def tune_pair(self, pair, wait_key=True):
         """Tune a pair of images."""
