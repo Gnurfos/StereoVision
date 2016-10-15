@@ -64,6 +64,7 @@ def main():
     if not os.path.exists(args.output_folder):
         os.makedirs(args.output_folder)
     progress.start()
+    skip_frames = 10
     with ChessboardFinder((args.left, args.right), args.resolution) as pair:
         for i in range(args.num_pictures):
             frames = pair.get_chessboard(args.columns, args.rows, True)
@@ -72,8 +73,9 @@ def main():
                 filename = "{}_{}.ppm".format(side, number_string)
                 output_path = os.path.join(args.output_folder, filename)
                 cv2.imwrite(output_path, frame)
+                #print "Wrote " + output_path
             progress.update(progress.maxval - (args.num_pictures - i))
-            for i in range(10):
+            for _ in range(skip_frames):
                 pair.show_frames(1)
         progress.finish()
     if args.calibration_folder:

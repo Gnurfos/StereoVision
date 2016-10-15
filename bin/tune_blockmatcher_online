@@ -52,6 +52,7 @@ def main():
     args = parser.parse_args()
 
     calibration = StereoCalibration(input_folder=args.calibration_folder)
+
     if args.use_stereobm:
         block_matcher = StereoBM()
     else:
@@ -60,7 +61,7 @@ def main():
     with StereoPair(args.devices, args.resolution) as pair:
         image_pair = pair.get_frames()
         rectified_pair = calibration.rectify(image_pair)
-        tuner = BMTuner(block_matcher, calibration, rectified_pair, show_sources=True)
+        tuner = BMTuner(block_matcher, calibration, rectified_pair, show_sources=True, time_smoothing_window=1)
 
         while True:
             image_pair = pair.get_frames()

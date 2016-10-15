@@ -57,9 +57,7 @@ class StereoPair(object):
         ``resolution`` can be either an int pair, or a string like "320x240"
                        to which the cameras capture will be forced
         """
-
         if devices[0] != devices[1]:
-            #: Video captures associated with the ``StereoPair``
             self.captures = [cv2.VideoCapture(device) for device in devices]
         else:
             # Stereo images come from a single device, as single image
@@ -68,11 +66,11 @@ class StereoPair(object):
 
         if resolution is not None:
             if isinstance(resolution, basestring):
-                resolution = map(int, resolution.split("x"))
-            for c in self.captures:
-                c.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, resolution[0])
-                c.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, resolution[1])
-
+                resolution = map(int, self.resolution.split("x"))
+                for cap in self.captures:
+                    cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, resolution[0])
+                    cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, resolution[1])
+                    cap.set(cv2.cv.CV_CAP_PROP_FPS, 10)
 
     def __enter__(self):
         return self
@@ -170,8 +168,10 @@ class CalibratedPair(StereoPair):
     def get_point_cloud(self, pair):
         """Get 3D point cloud from image pair."""
         disparity = self.block_matcher.get_disparity(pair)
-        disparity = ((disparity - disparity.min()) * 255 / (disparity.max() - disparity.min())).astype(numpy.uint8)
+        validity_threshold = self.block_matcher.minDisparity + numpy.finfo(numpy.float32).eps
+        validity_map = disparity > validity_threshold
+
         points = self.block_matcher.get_3d(disparity,
                                            self.calibration.disp_to_depth_mat)
         colors = cv2.cvtColor(pair[0], cv2.COLOR_BGR2RGB)
-        return PointCloud(points, colors)
+        return PointCloud(points, colors, validity_map)

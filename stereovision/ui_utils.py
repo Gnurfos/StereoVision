@@ -43,7 +43,7 @@ import os
 import cv2
 from progressbar import ProgressBar, Percentage, Bar
 from stereovision.calibration import StereoCalibrator
-from stereovision.exceptions import BadBlockMatcherArgumentError
+from stereovision.exceptions import BadBlockMatcherArgumentError, ChessboardNotFoundError
 
 #: Command line arguments for collecting information about chessboards
 import numpy
@@ -102,8 +102,12 @@ def calibrate_folder(args):
     while args.input_files:
         left, right = args.input_files[:2]
         img_left, im_right = cv2.imread(left), cv2.imread(right)
-        calibrator.add_corners((img_left, im_right),
-                               show_results=args.show_chessboards)
+        try:
+            calibrator.add_corners((img_left, im_right),
+                                   show_results=args.show_chessboards)
+        except ChessboardNotFoundError:
+            print "Error with %s,%s" % (left, right)
+            raise
         args.input_files = args.input_files[2:]
         progress.update(progress.maxval - len(args.input_files))
 
@@ -114,7 +118,7 @@ def calibrate_folder(args):
     print("The average error between chessboard points and their epipolar "
           "lines is \n"
           "{} pixels. This should be as small as possible.".format(avg_error))
-    calibration.export(args.output_folder)
+    calibration.export(args.output_folder, avg_error)
 
 
 class BMTuner(object):
@@ -185,7 +189,7 @@ class BMTuner(object):
             self.bm_settings[parameter].append(
                                self.block_matcher.__getattribute__(parameter))
 
-    def __init__(self, block_matcher, calibration, image_pair, show_sources=False, time_smoothing_window=3):
+    def __init__(self, block_matcher, calibration, image_pair, show_sources=False, time_smoothing_window=1):
         """
         Initialize tuner window and tune given pair.
 
@@ -244,11 +248,11 @@ class BMTuner(object):
         self.last_disparities[self.next_disparity_index] = disparity
         self.next_disparity_index = (self.next_disparity_index + 1) % self.time_smoothing_window
 
-        smoothed = self._get_smoothed_disparity()
-
-        padding = numpy.zeros((self.pair[0].shape[0], self.pair[0].shape[1], 3), numpy.uint8)
-        padded = numpy.concatenate((padding, smoothed, padding), axis=1)
-        display = numpy.concatenate((display, padded), axis=0)
+        if self.time_smoothing_window > 1:
+            smoothed = self._get_smoothed_disparity()
+            padding = numpy.zeros((self.pair[0].shape[0], self.pair[0].shape[1], 3), numpy.uint8)
+            padded = numpy.concatenate((padding, smoothed, padding), axis=1)
+            display = numpy.concatenate((display, padded), axis=0)
 
         cv2.imshow(self.window_name, display)
 

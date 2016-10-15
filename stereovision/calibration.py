@@ -55,14 +55,14 @@ class StereoCalibration(object):
         for key, item in calibration.__dict__.items():
             self.__dict__[key] = item
 
-    def _interact_with_folder(self, output_folder, action):
+    def _interact_with_folder(self, output_folder, action, avg_error=None):
         """
         Export/import matrices as *.npy files to/from an output folder.
 
         ``action`` is a string. It determines whether the method reads or writes
         to disk. It must have one of the following values: ('r', 'w').
         """
-        if not action in ('r', 'w'):
+        if action not in ('r', 'w'):
             raise ValueError("action must be either 'r' or 'w'.")
         for key, item in self.__dict__.items():
             if isinstance(item, dict):
@@ -79,6 +79,9 @@ class StereoCalibration(object):
                     np.save(filename, self.__dict__[key])
                 else:
                     self.__dict__[key] = np.load(filename)
+        if action == 'w' and avg_error is not None:
+            filename = os.path.join(output_folder, "avg_error_{}".format(avg_error))
+            open(filename, 'w').close()
 
     def __init__(self, calibration=None, input_folder=None):
         """
@@ -121,11 +124,11 @@ class StereoCalibration(object):
         """Load values from ``*.npy`` files in ``input_folder``."""
         self._interact_with_folder(input_folder, 'r')
 
-    def export(self, output_folder):
+    def export(self, output_folder, avg_error):
         """Export matrices as ``*.npy`` files to an output folder."""
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
-        self._interact_with_folder(output_folder, 'w')
+        self._interact_with_folder(output_folder, 'w', avg_error)
 
     def rectify(self, frames):
         """

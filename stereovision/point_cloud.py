@@ -46,7 +46,7 @@ property uchar blue
 end_header
 ''')
 
-    def __init__(self, coordinates, colors):
+    def __init__(self, coordinates, colors, validity_map):
         """
         Initialize point cloud with given coordinates and associated colors.
 
@@ -57,6 +57,8 @@ end_header
         """
         self.coordinates = coordinates.reshape(-1, 3)
         self.colors = colors.reshape(-1, 3)
+        if validity_map is not None:
+            self.validity_map = validity_map.reshape(-1)
 
     def write_ply(self, output_file):
         """Export ``PointCloud`` to PLY file for viewing in MeshLab."""
@@ -69,6 +71,10 @@ end_header
     def filter_infinity(self):
         """Filter infinite distances from ``PointCloud.``"""
         mask = self.coordinates[:, 2] > self.coordinates[:, 2].min()
+        mask2 = self.coordinates[:, 2] < self.coordinates[:, 2].max()
+        mask = np.logical_and(mask, mask2)
+        mask = np.logical_and(mask, self.validity_map)
         coords = self.coordinates[mask]
+        print "Infinity filter kept %s out of %s points" % (coords.shape[0], self.coordinates.shape[0])
         colors = self.colors[mask]
-        return PointCloud(coords, colors)
+        return PointCloud(coords, colors, None)
