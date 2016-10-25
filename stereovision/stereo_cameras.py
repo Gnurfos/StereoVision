@@ -66,7 +66,7 @@ class StereoPair(object):
 
         if resolution is not None:
             if isinstance(resolution, basestring):
-                resolution = map(int, self.resolution.split("x"))
+                resolution = map(int, resolution.split("x"))
                 for cap in self.captures:
                     cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, resolution[0])
                     cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, resolution[1])

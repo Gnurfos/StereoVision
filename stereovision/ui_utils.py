@@ -214,7 +214,7 @@ class BMTuner(object):
         self.rendermaxdepth = 10
 
         self.time_smoothing_window = time_smoothing_window
-        self.last_disparities = [None] * time_smoothing_window
+        self.last_disparities = [(None, None)] * time_smoothing_window
         self.next_disparity_index = 0
         self.accepted_deviation = 10
 
@@ -227,32 +227,41 @@ class BMTuner(object):
         because the pixels are stored as floating points.
         """
         disparity = self.block_matcher.get_disparity(self.pair)
-
-        #gray_l = cv2.cvtColor(self.pair[0], cv2.COLOR_BGR2GRAY)
-        #gray_r = cv2.cvtColor(self.pair[1], cv2.COLOR_BGR2GRAY)
-
         validity_threshold = self.block_matcher.minDisparity - 1 + numpy.finfo(numpy.float32).eps
-        _, validity_map = cv2.threshold(disparity, validity_threshold, 255, cv2.THRESH_BINARY)
-        validity_map = validity_map.astype(numpy.uint8)
-        validity_map = cv2.cvtColor(validity_map, cv2.COLOR_GRAY2BGR)
+        validity_bool = disparity > validity_threshold
+        validity_int = (validity_bool * 255).astype(numpy.uint8)
+        validity_3int = cv2.cvtColor(validity_int, cv2.COLOR_GRAY2BGR)
 
-        corrected_disparity = self._color_disparity(disparity)
-        corrected_disparity = cv2.bitwise_and(corrected_disparity, validity_map)
-        display = corrected_disparity
+        colored_disparity = self._color_disparity(disparity)
+        colored_disparity = cv2.bitwise_and(colored_disparity, validity_3int)
+        display = colored_disparity
 
         if self.show_sources:
 
             display = numpy.concatenate((self.pair[0], display), axis=1)
             display = numpy.concatenate((display, self.pair[1]), axis=1)
 
-        self.last_disparities[self.next_disparity_index] = disparity
+        self.last_disparities[self.next_disparity_index] = (disparity, validity_bool)
         self.next_disparity_index = (self.next_disparity_index + 1) % self.time_smoothing_window
 
         if self.time_smoothing_window > 1:
-            smoothed = self._get_smoothed_disparity()
+            smoothed, validity = self._get_smoothed_disparity()
+            validity_int = (validity_bool * 255).astype(numpy.uint8)
+            validity_3int = cv2.cvtColor(validity_int, cv2.COLOR_GRAY2BGR)
+            colored_smoothed = self._color_disparity(smoothed)
+            colored_smoothed = cv2.bitwise_and(colored_smoothed, validity_3int)
+
             padding = numpy.zeros((self.pair[0].shape[0], self.pair[0].shape[1], 3), numpy.uint8)
-            padded = numpy.concatenate((padding, smoothed, padding), axis=1)
+            if self.show_sources:
+                padded = numpy.concatenate((padding, colored_smoothed, padding), axis=1)
+            else:
+                padded = colored_smoothed
             display = numpy.concatenate((display, padded), axis=0)
+            self.disparity = smoothed
+            self.validity = validity
+        else:
+            self.disparity = disparity
+            self.validity = validity_bool
 
         cv2.imshow(self.window_name, display)
 
@@ -267,21 +276,14 @@ class BMTuner(object):
         return cv2.applyColorMap(corrected_disparity, cv2.COLORMAP_JET)
 
     def _get_smoothed_disparity(self):
-        validity_threshold = self.block_matcher.minDisparity - 1 + numpy.finfo(numpy.float32).eps
-        validities = [cv2.threshold(d, validity_threshold, 255, cv2.THRESH_BINARY)[1].astype(numpy.uint8) for d in self.last_disparities if d is not None]
-        validity = reduce(cv2.bitwise_and, validities)
-        validity3d = cv2.cvtColor(validity, cv2.COLOR_GRAY2BGR)
-        res_disp = numpy.zeros_like(self.last_disparities[0])
-        for (x, y), pixel_validity in numpy.ndenumerate(validity):
-            if pixel_validity:
-                disps = [d[x][y] for d in self.last_disparities if d is not None]
-                dev = numpy.std(disps)
-                if dev < self.accepted_deviation:
-                    res_disp[x][y] = numpy.mean(disps)
-                else:
-                    print 'Discarding too deviant disparity (%s) at %s,%s' % (dev, x, y)
-        res_disp = self._color_disparity(res_disp)
-        return cv2.bitwise_and(res_disp, validity3d)
+        validities = [v for d, v in self.last_disparities if d is not None]
+        validity = reduce(numpy.logical_and, validities)
+        disparities = [d for d, v in self.last_disparities if d is not None]
+        deviation = numpy.std(disparities, axis=0)
+        deviation_validity = deviation < self.accepted_deviation
+        validity = numpy.logical_and(validity, deviation_validity)
+        mean = numpy.mean(disparities, axis=0)
+        return mean, validity
 
     def tune_pair(self, pair, wait_key=True):
         """Tune a pair of images."""
