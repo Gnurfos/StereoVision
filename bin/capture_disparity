@@ -1,0 +1,95 @@
+#!/usr/bin/env python
+# Copyright (C) 2014 Daniel Lee <lee.daniel.1986@gmail.com>
+#
+# This file is part of StereoVision.
+#
+# StereoVision is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# StereoVision is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with StereoVision.  If not, see <http://www.gnu.org/licenses/>.
+
+
+import argparse
+import os
+
+import cv2
+from stereovision.blockmatchers import StereoBM, StereoSGBM
+from stereovision.calibration import StereoCalibration
+from stereovision.stereo_cameras import StereoPair
+from stereovision.point_cloud import PointCloud
+import numpy
+
+
+def main():
+    """Capture a PLY point cloud or image pair at the end of a camera stream."""
+    parser = argparse.ArgumentParser(description="TODO")
+    parser.add_argument("calibration", help="Path to calibration folder.")
+    parser.add_argument("--bm_settings",
+                        help="Path to block matcher's settings.")
+    parser.add_argument("devices", type=int, nargs=2, help="Device numbers "
+                        "for the cameras that should be accessed in order "
+                        " (left, right).")
+    parser.add_argument("--resolution", type=str, default=None,
+                        help="Capture resolution (WxH).")
+    parser.add_argument("--out_point_cloud", help="Path to output file.")
+    parser.add_argument("--out_pair", help="Path to output files dir.")
+    args = parser.parse_args()
+
+    calibration = StereoCalibration(input_folder=args.calibration)
+    block_matcher = StereoSGBM()
+    if args.bm_settings:
+        block_matcher.load_settings(args.bm_settings)
+
+    with StereoPair(args.devices, args.resolution) as pair:
+        while True:
+            image_pair = pair.get_frames()
+            rectified_pair = calibration.rectify(image_pair)
+            disparity = block_matcher.get_disparity(rectified_pair)
+            validity_threshold = block_matcher.minDisparity - 1 + numpy.finfo(numpy.float32).eps
+            _, validity_map = cv2.threshold(disparity, validity_threshold, 255, cv2.THRESH_BINARY)
+            validity_map = validity_map.astype(numpy.uint8)
+            validity_map_3chan = cv2.cvtColor(validity_map, cv2.COLOR_GRAY2BGR)
+
+            corrected_disparity = _color_disparity(1, disparity)
+            corrected_disparity = cv2.bitwise_and(corrected_disparity, validity_map_3chan)
+            display = corrected_disparity
+
+            cv2.imshow("Disparity", display)
+
+            key = cv2.waitKey(10)
+            if key != -1:
+
+                if args.out_point_cloud:
+                    points = cv2.reprojectImageTo3D(disparity, calibration.disp_to_depth_mat, handleMissingValues=True)
+                    colors = cv2.cvtColor(rectified_pair[0], cv2.COLOR_BGR2RGB)
+                    points = PointCloud(points, colors)
+                    points = points.filter_infinity()
+                    points.write_ply(args.out_point_cloud)
+
+                if args.out_pair:
+                    if not os.path.exists(args.out_pair):
+                        os.mkdir(args.out_pair)
+                    for side, image in zip(("left", "right"), image_pair):
+                        filename = "{}.ppm".format(side)
+                        output_path = os.path.join(args.out_pair, filename)
+                        cv2.imwrite(output_path, image)
+
+                break
+
+
+def _color_disparity(norm_coeff, disparity):
+    corrected_disparity = ((disparity - disparity.min()) * norm_coeff)
+    corrected_disparity = numpy.clip(corrected_disparity, 0, 255).astype(numpy.uint8)
+    return cv2.applyColorMap(corrected_disparity, cv2.COLORMAP_JET)
+
+
+if __name__ == "__main__":
+    main()
