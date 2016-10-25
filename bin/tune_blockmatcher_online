@@ -30,6 +30,8 @@ from stereovision.blockmatchers import StereoBM, StereoSGBM
 from stereovision.calibration import StereoCalibration
 from stereovision.ui_utils import find_files, BMTuner, STEREO_BM_FLAG
 from stereovision.stereo_cameras import StereoPair
+from stereovision.point_cloud import PointCloud
+import time
 
 
 def main():
@@ -49,6 +51,10 @@ def main():
     parser.add_argument("--bm_settings",
                         help="File to save last block matcher settings to.",
                         default="")
+    parser.add_argument("--initial_bm_settings",
+                        help="File to load initial block matcher settings from.",
+                        default="")
+    parser.add_argument("--out_point_cloud", help="Path to output file.")
     args = parser.parse_args()
 
     calibration = StereoCalibration(input_folder=args.calibration_folder)
@@ -58,17 +64,29 @@ def main():
     else:
         block_matcher = StereoSGBM(min_disparity=0)
 
+    if args.initial_bm_settings:
+        block_matcher.load_settings(args.initial_bm_settings)
+
     with StereoPair(args.devices, args.resolution) as pair:
         image_pair = pair.get_frames()
         rectified_pair = calibration.rectify(image_pair)
-        tuner = BMTuner(block_matcher, calibration, rectified_pair, show_sources=True, time_smoothing_window=1)
+        tuner = BMTuner(block_matcher, calibration, rectified_pair, show_sources=False, time_smoothing_window=3)
 
         while True:
+            start = time.time()
             image_pair = pair.get_frames()
             rectified_pair = calibration.rectify(image_pair)
             tuner.tune_pair(rectified_pair, wait_key=False)
+            duration = time.time() - start
+            print 'FPS: %.2f (%.3fs spent)' % (1./duration, duration)
             key = cv2.waitKey(10)
             if key != -1:
+                if args.out_point_cloud:
+                    points = cv2.reprojectImageTo3D(tuner.disparity, calibration.disp_to_depth_mat, handleMissingValues=True)
+                    colors = cv2.cvtColor(rectified_pair[0], cv2.COLOR_BGR2RGB)
+                    points = PointCloud(points, colors, tuner.validity)
+                    points = points.filter_infinity()
+                    points.write_ply(args.out_point_cloud)
                 break
 
     for param in block_matcher.parameter_maxima:
