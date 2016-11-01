@@ -70,7 +70,7 @@ def main():
     with StereoPair(args.devices, args.resolution) as pair:
         image_pair = pair.get_frames()
         rectified_pair = calibration.rectify(image_pair)
-        tuner = BMTuner(block_matcher, calibration, rectified_pair, show_sources=False, time_smoothing_window=3)
+        tuner = BMTuner(block_matcher, calibration, rectified_pair, show_sources=False, time_smoothing_window=1)
 
         while True:
             start = time.time()

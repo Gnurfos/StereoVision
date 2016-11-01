@@ -58,7 +58,7 @@ def main():
             validity_map = validity_map.astype(numpy.uint8)
             validity_map_3chan = cv2.cvtColor(validity_map, cv2.COLOR_GRAY2BGR)
 
-            corrected_disparity = _color_disparity(1, disparity)
+            corrected_disparity = _color_disparity(disparity, block_matcher.minDisparity, block_matcher.numDisparities)
             corrected_disparity = cv2.bitwise_and(corrected_disparity, validity_map_3chan)
             display = corrected_disparity
 
@@ -69,8 +69,10 @@ def main():
 
                 if args.out_point_cloud:
                     points = cv2.reprojectImageTo3D(disparity, calibration.disp_to_depth_mat, handleMissingValues=True)
+                    validity_threshold = block_matcher.minDisparity + numpy.finfo(numpy.float32).eps
+                    validity_map = disparity > validity_threshold
                     colors = cv2.cvtColor(rectified_pair[0], cv2.COLOR_BGR2RGB)
-                    points = PointCloud(points, colors)
+                    points = PointCloud(points, colors, validity_map)
                     points = points.filter_infinity()
                     points.write_ply(args.out_point_cloud)
 
@@ -85,8 +87,10 @@ def main():
                 break
 
 
-def _color_disparity(norm_coeff, disparity):
-    corrected_disparity = ((disparity - disparity.min()) * norm_coeff)
+def _color_disparity(disparity, disparity_min, num_disps):
+    disparity_range = num_disps - 1
+    norm_coeff = 255. / disparity_range
+    corrected_disparity = ((disparity - disparity_min) * norm_coeff)
     corrected_disparity = numpy.clip(corrected_disparity, 0, 255).astype(numpy.uint8)
     return cv2.applyColorMap(corrected_disparity, cv2.COLORMAP_JET)
 

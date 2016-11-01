@@ -107,18 +107,18 @@ def calibrate_folder(args):
                                    show_results=args.show_chessboards)
         except ChessboardNotFoundError:
             print "Error with %s,%s" % (left, right)
-            raise
         args.input_files = args.input_files[2:]
         progress.update(progress.maxval - len(args.input_files))
 
     progress.finish()
     print("Calibrating cameras. This can take a while.")
     calibration = calibrator.calibrate_cameras()
-    avg_error = calibrator.check_calibration(calibration)
+    avg_error, ocv_error = calibrator.check_calibration(calibration)
     print("The average error between chessboard points and their epipolar "
           "lines is \n"
-          "{} pixels. This should be as small as possible.".format(avg_error))
-    calibration.export(args.output_folder, avg_error)
+          "{} pixels. This should be as small as possible.\n"
+          "Opencv reported errror is {}".format(avg_error, ocv_error))
+    calibration.export(args.output_folder, avg_error, ocv_error)
 
 
 class BMTuner(object):
@@ -270,8 +270,10 @@ class BMTuner(object):
         cv2.waitKey()
 
     def _color_disparity(self, disparity):
-        norm_coeff = self.rendermaxdepth
-        corrected_disparity = ((disparity - disparity.min()) * norm_coeff)
+        disparity_min = self.block_matcher.minDisparity
+        disparity_range = self.block_matcher.numDisparities - 1
+        norm_coeff = 255. / disparity_range
+        corrected_disparity = ((disparity - disparity_min) * norm_coeff)
         corrected_disparity = numpy.clip(corrected_disparity, 0, 255).astype(numpy.uint8)
         return cv2.applyColorMap(corrected_disparity, cv2.COLORMAP_JET)
 

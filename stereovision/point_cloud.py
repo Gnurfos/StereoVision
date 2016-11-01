@@ -72,7 +72,9 @@ end_header
         """Filter infinite distances from ``PointCloud.``"""
         mask = self.coordinates[:, 2] > self.coordinates[:, 2].min()
         mask2 = self.coordinates[:, 2] < self.coordinates[:, 2].max()
+        distance_mask = self.coordinates[:, 2] > -20.
         mask = np.logical_and(mask, mask2)
+        mask = np.logical_and(mask, distance_mask)
         mask = np.logical_and(mask, self.validity_map)
         coords = self.coordinates[mask]
         print "Infinity filter kept %s out of %s points" % (coords.shape[0], self.coordinates.shape[0])

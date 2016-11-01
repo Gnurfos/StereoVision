@@ -55,7 +55,7 @@ class StereoCalibration(object):
         for key, item in calibration.__dict__.items():
             self.__dict__[key] = item
 
-    def _interact_with_folder(self, output_folder, action, avg_error=None):
+    def _interact_with_folder(self, output_folder, action, avg_error=None, ocv_error=None):
         """
         Export/import matrices as *.npy files to/from an output folder.
 
@@ -82,6 +82,9 @@ class StereoCalibration(object):
         if action == 'w' and avg_error is not None:
             filename = os.path.join(output_folder, "avg_error_{}".format(avg_error))
             open(filename, 'w').close()
+            filename = os.path.join(output_folder, "ocv_error_{}".format(ocv_error))
+            open(filename, 'w').close()
+
 
     def __init__(self, calibration=None, input_folder=None):
         """
@@ -124,11 +127,11 @@ class StereoCalibration(object):
         """Load values from ``*.npy`` files in ``input_folder``."""
         self._interact_with_folder(input_folder, 'r')
 
-    def export(self, output_folder, avg_error):
+    def export(self, output_folder, avg_error, ocv_error):
         """Export matrices as ``*.npy`` files to an output folder."""
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
-        self._interact_with_folder(output_folder, 'w', avg_error)
+        self._interact_with_folder(output_folder, 'w', avg_error, ocv_error)
 
     def rectify(self, frames):
         """
@@ -208,15 +211,15 @@ class StereoCalibrator(object):
         The image pair should be an iterable composed of two CvMats ordered
         (left, right).
         """
-        side = "left"
-        self.object_points.append(self.corner_coordinates)
-        for image in image_pair:
-            corners = self._get_corners(image)
+        corners = {}
+        for image, side in zip(image_pair, ["left", "right"]):
+            corners[side] = self._get_corners(image)
             if show_results:
-                self._show_corners(image, corners)
-            self.image_points[side].append(corners.reshape(-1, 2))
-            side = "right"
-            self.image_count += 1
+                self._show_corners(image, corners[side])
+        for side in ["left", "right"]:
+            self.image_points[side].append(corners[side].reshape(-1, 2))
+        self.object_points.append(self.corner_coordinates)
+        self.image_count += 1
 
     def calibrate_cameras(self):
         """Calibrate cameras based on found chessboard corners."""
@@ -225,7 +228,7 @@ class StereoCalibrator(object):
         flags = (cv2.CALIB_FIX_ASPECT_RATIO + cv2.CALIB_ZERO_TANGENT_DIST +
                  cv2.CALIB_SAME_FOCAL_LENGTH)
         calib = StereoCalibration()
-        (calib.cam_mats["left"], calib.dist_coefs["left"],
+        (ret, calib.cam_mats["left"], calib.dist_coefs["left"],
          calib.cam_mats["right"], calib.dist_coefs["right"],
          calib.rot_mat, calib.trans_vec, calib.e_mat,
          calib.f_mat) = cv2.stereoCalibrate(self.object_points,
@@ -241,7 +244,8 @@ class StereoCalibrator(object):
                                             calib.e_mat,
                                             calib.f_mat,
                                             criteria=criteria,
-                                            flags=flags)[1:]
+                                            flags=flags)
+        self.opencv_reproj_error = ret
         (calib.rect_trans["left"], calib.rect_trans["right"],
          calib.proj_mats["left"], calib.proj_mats["right"],
          calib.disp_to_depth_mat, calib.valid_boxes["left"],
@@ -305,4 +309,4 @@ class StereoCalibrator(object):
                                    lines[other_side][i][0][2])
             other_side, this_side = sides
         total_points = self.image_count * len(self.object_points)
-        return total_error / total_points
+        return total_error / total_points, self.opencv_reproj_error
